@@ -23,7 +23,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs"
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs",
+    "smoke": "npm run build && node scripts/smoke-ingest.mjs"
   },
   "peerDependencies": {
     "express": ">=4"
