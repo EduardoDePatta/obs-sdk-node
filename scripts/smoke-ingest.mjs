@@ -1,6 +1,34 @@
 import { randomUUID } from 'node:crypto';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+
+function applyEnvFile(filePath) {
+  if (!existsSync(filePath)) {
+    return;
+  }
+
+  const lines = readFileSync(filePath, 'utf8').split('\n');
+  for (const line of lines) {
+    const trimmed = line.trim();
+    if (trimmed === '' || trimmed.startsWith('#')) {
+      continue;
+    }
+
+    const separator = trimmed.indexOf('=');
+    if (separator <= 0) {
+      continue;
+    }
+
+    const key = trimmed.slice(0, separator);
+    const current = process.env[key];
+    if (current !== undefined && current !== '') {
+      continue;
+    }
+
+    process.env[key] = trimmed.slice(separator + 1);
+  }
+}
 
 function requireEnv(name) {
   const value = process.env[name];
@@ -18,6 +46,7 @@ function sleep(ms) {
 }
 
 const here = dirname(fileURLToPath(import.meta.url));
+applyEnvFile(join(here, '../.env'));
 const distIndex = pathToFileURL(join(here, '../dist/index.js')).href;
 const { createClient } = await import(distIndex);
 
