@@ -40,7 +40,7 @@ const noCommentPlugin = {
 
 export default tseslint.config(
   {
-    ignores: ['dist/**', 'node_modules/**', 'scripts/**'],
+    ignores: ['dist/**', 'dist-cjs/**', 'node_modules/**', 'scripts/**'],
   },
   eslint.configs.recommended,
   ...tseslint.configs.recommended,

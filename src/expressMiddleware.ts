@@ -3,7 +3,7 @@ import type { NextFunction, Request, Response } from 'express';
 
 import { MAX_TAGS_PER_REQUEST } from './config';
 import type { ObsClient } from './client';
-import { bindStore, createStore, type RequestStore } from './context';
+import { createStore, runWith, type RequestStore } from './context';
 import { toBodyJson, toHeadersJson } from './toJsonField';
 import type { IngestRequest } from './types';
 
@@ -241,7 +241,6 @@ export default function expressMiddleware(
     next: NextFunction,
   ): void {
     const store = createStore();
-    bindStore(store);
     wrapResponse({ res, store });
 
     res.on('finish', () => {
@@ -259,6 +258,8 @@ export default function expressMiddleware(
       }
     });
 
-    next();
+    runWith(store, function withStore() {
+      next();
+    });
   };
 }
