@@ -1,6 +1,7 @@
 {
-  "name": "@obs-platform/node",
-  "version": "0.0.1",
+  "name": "traceorb-node",
+  "version": "0.1.0",
+  "description": "Traceorb ingest SDK for Node.js",
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -26,6 +27,7 @@
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs && tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
+    "prepublishOnly": "npm run build",
     "smoke": "npm run build && node scripts/smoke-ingest.mjs"
   },
   "peerDependencies": {
