@@ -113,7 +113,7 @@ function wrapResponse({
   }) as Response['json'];
 
   res.send = ((body?: unknown) => {
-    if (body !== undefined) {
+    if (body !== undefined && store.responseBody === undefined) {
       store.responseBody = body;
     }
     return originalSend(body);

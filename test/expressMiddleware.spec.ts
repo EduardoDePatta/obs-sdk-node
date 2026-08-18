@@ -13,7 +13,8 @@ function createRes(): Response {
   const res = emitter as unknown as Response & EventEmitter;
   res.statusCode = 200;
   res.json = ((body?: unknown) => {
-    void body;
+    const payload = JSON.stringify(body);
+    res.send(payload);
     return res;
   }) as Response['json'];
   res.send = ((body?: unknown) => {
@@ -134,6 +135,7 @@ describe('expressMiddleware', () => {
     expect(request?.requestHeadersJson).toContain('[redacted]');
     expect(request?.requestBodyJson).toContain('[redacted]');
     expect(request?.requestBodyJson).toContain('abc');
+    expect(request?.responseBodyJson).toBe('{"ok":true}');
     client.close();
   });
 
