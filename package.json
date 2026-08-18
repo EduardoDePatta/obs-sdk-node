@@ -5,16 +5,18 @@
   "engines": {
     "node": ">=22"
   },
-  "main": "./dist/index.js",
+  "main": "./dist-cjs/index.js",
   "types": "./dist/index.d.ts",
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./dist/index.js"
+      "import": "./dist/index.js",
+      "require": "./dist-cjs/index.js"
     }
   },
   "files": [
-    "dist"
+    "dist",
+    "dist-cjs"
   ],
   "scripts": {
     "test": "vitest run",
@@ -23,7 +25,7 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit",
-    "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs",
+    "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs && tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
     "smoke": "npm run build && node scripts/smoke-ingest.mjs"
   },
   "peerDependencies": {
