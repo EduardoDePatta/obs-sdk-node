@@ -1,6 +1,6 @@
 # traceorb-node
 
-Node.js SDK for [Traceorb](https://app.traceorb.com). Send request traces from your API to your Traceorb workspace.
+Node.js SDK for [Traceorb](https://traceorb.com). Send request traces from your API to your Traceorb workspace.
 
 ## Install
 
@@ -10,7 +10,7 @@ npm install traceorb-node
 
 ## Configure
 
-Create a write key in the Traceorb panel. Set these in your app:
+Create a write key after you have a workspace. Sign up at [traceorb.com](https://traceorb.com). Set these in your app:
 
 ```
 OBS_INGEST_URL=https://api.traceorb.com/v1/ingest
