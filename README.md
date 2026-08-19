@@ -22,28 +22,34 @@ The SDK does not read the environment by itself. Pass the values into `createCli
 ## Usage
 
 ```js
+import express from 'express';
 import { createClient, expressMiddleware } from 'traceorb-node';
 
 const ingestUrl = process.env.OBS_INGEST_URL;
 const writeKey = process.env.OBS_WRITE_KEY;
-if (!ingestUrl || !writeKey) {
-  console.warn('traceorb-node skipped (OBS_INGEST_URL / OBS_WRITE_KEY unset)');
-} else {
-  const obs = createClient({
-    ingestUrl,
-    writeKey,
-    service: 'my-api',
-    env: process.env.NODE_ENV ?? 'development',
-  });
-
-  app.use(
-    expressMiddleware(obs, {
-      resolveTags(req) {
-        return { tenant: req.tenant ?? '' };
-      },
-    }),
-  );
+if (ingestUrl === undefined || ingestUrl === '') {
+  throw new Error('OBS_INGEST_URL is required');
 }
+if (writeKey === undefined || writeKey === '') {
+  throw new Error('OBS_WRITE_KEY is required');
+}
+
+const app = express();
+const obs = createClient({
+  ingestUrl,
+  writeKey,
+  service: 'orders-api',
+  env: process.env.NODE_ENV ?? 'production',
+});
+
+app.use(express.json());
+app.use(
+  expressMiddleware(obs, {
+    resolveTags(req) {
+      return { tenant: String(req.headers['x-tenant'] ?? '') };
+    },
+  }),
+);
 ```
 
 CommonJS: `require('traceorb-node')`.
