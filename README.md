@@ -56,6 +56,36 @@ CommonJS: `require('traceorb-node')`.
 
 If Traceorb is unreachable, your HTTP request still completes. Sensitive headers such as `authorization` and `cookie` are not sent.
 
+Fastify:
+
+```js
+import Fastify from 'fastify';
+import { createClient, fastifyMiddleware } from 'traceorb-node';
+
+const ingestUrl = process.env.OBS_INGEST_URL;
+const writeKey = process.env.OBS_WRITE_KEY;
+if (ingestUrl === undefined || ingestUrl === '') {
+  throw new Error('OBS_INGEST_URL is required');
+}
+if (writeKey === undefined || writeKey === '') {
+  throw new Error('OBS_WRITE_KEY is required');
+}
+
+const app = Fastify();
+const obs = createClient({
+  ingestUrl,
+  writeKey,
+  service: 'orders-api',
+  env: process.env.NODE_ENV ?? 'production',
+});
+
+fastifyMiddleware(app, obs, {
+  skip(request) {
+    return request.url === '/health';
+  },
+});
+```
+
 Inside a request:
 
 ```js

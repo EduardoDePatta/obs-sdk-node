@@ -1,11 +1,9 @@
 import type { IncomingHttpHeaders } from 'node:http';
 import type { NextFunction, Request, Response } from 'express';
 
-import { MAX_TAGS_PER_REQUEST } from './config';
 import type { ObsClient } from './client';
 import { createStore, runWith, type RequestStore } from './context';
-import { toBodyJson, toHeadersJson } from './toJsonField';
-import type { IngestRequest } from './types';
+import ingestRequestFromCapture from './ingestRequestFromCapture';
 
 export type ExpressMiddlewareOptions = {
   resolveTags?: (req: Request) => Record<string, string> | undefined;
@@ -65,36 +63,6 @@ function resolveUserAgent(req: Request): string | undefined {
   return value;
 }
 
-function capTags(
-  tags: Record<string, string>,
-): Record<string, string> | undefined {
-  const entries = Object.entries(tags);
-  if (entries.length === 0) {
-    return undefined;
-  }
-
-  const capped = Object.fromEntries(entries.slice(0, MAX_TAGS_PER_REQUEST));
-  return capped;
-}
-
-function mergeTags({
-  store,
-  extra,
-}: {
-  store: RequestStore;
-  extra: Record<string, string> | undefined;
-}): Record<string, string> | undefined {
-  const merged: Record<string, string> = {
-    ...store.tags,
-  };
-
-  if (extra !== undefined) {
-    Object.assign(merged, extra);
-  }
-
-  return capTags(merged);
-}
-
 function wrapResponse({
   res,
   store,
@@ -120,117 +88,6 @@ function wrapResponse({
   }) as Response['send'];
 }
 
-function assignOptionalString({
-  target,
-  key,
-  value,
-}: {
-  target: IngestRequest;
-  key:
-    | 'userId'
-    | 'ip'
-    | 'userAgent'
-    | 'errorMessage'
-    | 'queryJson'
-    | 'requestHeadersJson'
-    | 'requestBodyJson'
-    | 'responseBodyJson';
-  value: string | undefined;
-}): void {
-  if (value === undefined || value === '') {
-    return;
-  }
-
-  target[key] = value;
-}
-
-function buildRequest({
-  req,
-  res,
-  store,
-  client,
-  options,
-}: {
-  req: Request;
-  res: Response;
-  store: RequestStore;
-  client: ObsClient;
-  options: ExpressMiddlewareOptions | undefined;
-}): IngestRequest {
-  const finishedAt = Date.now();
-  const durationMs = Math.max(0, finishedAt - store.startedAt.getTime());
-  const maxBytes = client.maxBodyBytes;
-
-  let extraTags: Record<string, string> | undefined;
-  if (options !== undefined && options.resolveTags !== undefined) {
-    extraTags = options.resolveTags(req);
-  }
-
-  let userId: string | undefined;
-  if (options !== undefined && options.resolveUserId !== undefined) {
-    userId = options.resolveUserId(req);
-  }
-
-  const request: IngestRequest = {
-    requestId: store.requestId,
-    timestamp: store.startedAt.toISOString(),
-    method: req.method,
-    path: resolvePath(req),
-    routePattern: resolveRoutePattern(req),
-    statusCode: res.statusCode,
-    durationMs,
-    service: client.service,
-    env: client.env,
-  };
-
-  const tags = mergeTags({ store, extra: extraTags });
-  if (tags !== undefined) {
-    request.tags = tags;
-  }
-
-  assignOptionalString({ target: request, key: 'userId', value: userId });
-  assignOptionalString({ target: request, key: 'ip', value: resolveIp(req) });
-  assignOptionalString({
-    target: request,
-    key: 'userAgent',
-    value: resolveUserAgent(req),
-  });
-  assignOptionalString({
-    target: request,
-    key: 'errorMessage',
-    value: store.errorMessage,
-  });
-  assignOptionalString({
-    target: request,
-    key: 'queryJson',
-    value: toBodyJson({ value: req.query, maxBytes }),
-  });
-  assignOptionalString({
-    target: request,
-    key: 'requestHeadersJson',
-    value: toHeadersJson({
-      headers: headersAsRecord(req.headers),
-      maxBytes,
-    }),
-  });
-  assignOptionalString({
-    target: request,
-    key: 'requestBodyJson',
-    value: toBodyJson({ value: req.body, maxBytes }),
-  });
-  assignOptionalString({
-    target: request,
-    key: 'responseBodyJson',
-    value: toBodyJson({ value: store.responseBody, maxBytes }),
-  });
-
-  if (store.events.length > 0) {
-    request.events = store.events;
-  }
-
-  return request;
-}
-
 export default function expressMiddleware(
   client: ObsClient,
   options?: ExpressMiddlewareOptions,
@@ -245,12 +102,31 @@ export default function expressMiddleware(
 
     res.on('finish', () => {
       try {
-        const request = buildRequest({
-          req,
-          res,
+        let extraTags: Record<string, string> | undefined;
+        let userId: string | undefined;
+        if (options !== undefined && options.resolveTags !== undefined) {
+          extraTags = options.resolveTags(req);
+        }
+        if (options !== undefined && options.resolveUserId !== undefined) {
+          userId = options.resolveUserId(req);
+        }
+
+        const request = ingestRequestFromCapture({
+          http: {
+            method: req.method,
+            path: resolvePath(req),
+            routePattern: resolveRoutePattern(req),
+            statusCode: res.statusCode,
+            query: req.query,
+            headers: headersAsRecord(req.headers),
+            body: req.body,
+            ip: resolveIp(req),
+            userAgent: resolveUserAgent(req),
+            extraTags,
+            userId,
+          },
           store,
           client,
-          options,
         });
         client.enqueue(request);
       } catch {

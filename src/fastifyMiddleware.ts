@@ -1,0 +1,174 @@
+import type { ObsClient } from './client';
+import { bindStore, createStore, type RequestStore } from './context';
+import ingestRequestFromCapture from './ingestRequestFromCapture';
+
+export type FastifyObsRequest = {
+  url: string;
+  method: string;
+  headers: Record<string, unknown>;
+  body?: unknown;
+  query?: unknown;
+  ip?: string;
+  routeOptions?: {
+    url?: string;
+  };
+};
+
+export type FastifyObsReply = {
+  statusCode: number;
+};
+
+export type FastifyObsApp = {
+  addHook(
+    name: 'onRequest',
+    hook: (
+      request: FastifyObsRequest,
+      reply: unknown,
+      done: () => void,
+    ) => void,
+  ): unknown;
+  addHook(
+    name: 'onSend',
+    hook: (
+      request: FastifyObsRequest,
+      reply: unknown,
+      payload: unknown,
+      done: (error: Error | null, payload?: unknown) => void,
+    ) => void,
+  ): unknown;
+  addHook(
+    name: 'onResponse',
+    hook: (
+      request: FastifyObsRequest,
+      reply: FastifyObsReply,
+      done: () => void,
+    ) => void,
+  ): unknown;
+};
+
+export type FastifyMiddlewareOptions = {
+  skip?: (request: FastifyObsRequest) => boolean;
+  resolveTags?: (
+    request: FastifyObsRequest,
+  ) => Record<string, string> | undefined;
+  resolveUserId?: (request: FastifyObsRequest) => string | undefined;
+};
+
+const stores = new WeakMap<object, RequestStore>();
+
+function shouldSkip({
+  request,
+  options,
+}: {
+  request: FastifyObsRequest;
+  options: FastifyMiddlewareOptions | undefined;
+}): boolean {
+  if (options === undefined || options.skip === undefined) {
+    return false;
+  }
+
+  return options.skip(request) === true;
+}
+
+function resolveUserAgent(request: FastifyObsRequest): string | undefined {
+  const value = request.headers['user-agent'];
+  if (typeof value !== 'string' || value === '') {
+    return undefined;
+  }
+
+  return value;
+}
+
+function resolveRoutePattern(request: FastifyObsRequest): string {
+  const routeOptions = request.routeOptions;
+  if (
+    routeOptions !== undefined &&
+    typeof routeOptions.url === 'string' &&
+    routeOptions.url !== ''
+  ) {
+    return routeOptions.url;
+  }
+
+  return request.url;
+}
+
+export default function fastifyMiddleware(
+  app: object,
+  client: ObsClient,
+  options?: FastifyMiddlewareOptions,
+): void {
+  const hooks = app as FastifyObsApp;
+  hooks.addHook('onRequest', function bindObsStore(request, _reply, done) {
+    if (shouldSkip({ request, options })) {
+      done();
+      return;
+    }
+
+    const store = createStore();
+    stores.set(request, store);
+    bindStore(store);
+    done();
+  });
+
+  hooks.addHook(
+    'onSend',
+    function captureObsBody(request, _reply, payload, done) {
+      const store = stores.get(request);
+      if (store === undefined) {
+        done(null, payload);
+        return;
+      }
+
+      store.responseBody = payload;
+      done(null, payload);
+    },
+  );
+
+  hooks.addHook('onResponse', function enqueueObsRequest(request, reply, done) {
+    const store = stores.get(request);
+    if (store === undefined) {
+      done();
+      return;
+    }
+
+    try {
+      let extraTags: Record<string, string> | undefined;
+      let userId: string | undefined;
+      if (options !== undefined && options.resolveTags !== undefined) {
+        extraTags = options.resolveTags(request);
+      }
+      if (options !== undefined && options.resolveUserId !== undefined) {
+        userId = options.resolveUserId(request);
+      }
+
+      let ip: string | undefined;
+      if (typeof request.ip === 'string' && request.ip !== '') {
+        ip = request.ip;
+      }
+
+      const captured = ingestRequestFromCapture({
+        http: {
+          method: request.method,
+          path: request.url,
+          routePattern: resolveRoutePattern(request),
+          statusCode: reply.statusCode,
+          query: request.query,
+          headers: { ...request.headers },
+          body: request.body,
+          ip,
+          userAgent: resolveUserAgent(request),
+          extraTags,
+          userId,
+        },
+        store,
+        client,
+      });
+      client.enqueue(captured);
+    } catch {
+      done();
+      return;
+    }
+
+    done();
+  });
+}
