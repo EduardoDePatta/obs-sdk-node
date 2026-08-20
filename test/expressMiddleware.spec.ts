@@ -272,3 +272,130 @@ describe('createClient', () => {
     client.close();
   });
 });
+
+describe('expressMiddleware fallbacks', () => {
+  test('uses url and socket when originalUrl and ip are missing', async () => {
+    const bodies: IngestPayload[] = [];
+    async function captureFetch(
+      _url: string,
+      init: { body: string },
+    ): Promise<{ status: number }> {
+      bodies.push(JSON.parse(init.body) as IngestPayload);
+      return { status: 202 };
+    }
+
+    const client = createClient({
+      ingestUrl: 'http://obs.test/v1/ingest',
+      writeKey: 'ok_write_test_secret',
+      service: 'demo',
+      env: 'test',
+      flushIntervalMs: 0,
+      fetch: captureFetch,
+    });
+    const middleware = expressMiddleware(client, {
+      resolveUserId() {
+        return 'user-9';
+      },
+    });
+    const req = {
+      method: 'GET',
+      originalUrl: '',
+      url: '/fallback',
+      headers: {
+        authorization: 'Bearer super-secret',
+        'user-agent': '',
+      },
+      body: { password: 'hunter2', sku: 'abc' },
+      query: { limit: '1' },
+      ip: '',
+      socket: { remoteAddress: '127.0.0.1' },
+    } as unknown as Request;
+    const res = createRes();
+
+    function noopNext(): void {
+      return;
+    }
+
+    middleware(req, res, noopNext);
+    res.send('plain');
+    res.emit('finish');
+    await client.flush();
+
+    const request = bodies[0]?.requests[0];
+    expect(request?.path).toBe('/fallback');
+    expect(request?.routePattern).toBe('/fallback');
+    expect(request?.ip).toBe('127.0.0.1');
+    expect(request?.userAgent).toBeUndefined();
+    expect(request?.userId).toBe('user-9');
+    expect(request?.responseBodyJson).toBe('"plain"');
+    client.close();
+  });
+
+  test('defaults path to slash when url is empty', async () => {
+    const bodies: IngestPayload[] = [];
+    async function captureFetch(
+      _url: string,
+      init: { body: string },
+    ): Promise<{ status: number }> {
+      bodies.push(JSON.parse(init.body) as IngestPayload);
+      return { status: 202 };
+    }
+
+    const client = createClient({
+      ingestUrl: 'http://obs.test/v1/ingest',
+      writeKey: 'ok_write_test_secret',
+      service: 'demo',
+      env: 'test',
+      flushIntervalMs: 0,
+      fetch: captureFetch,
+    });
+    const middleware = expressMiddleware(client);
+    const req = createReq();
+    req.originalUrl = '';
+    req.url = '';
+    const res = createRes();
+
+    function noopNext(): void {
+      return;
+    }
+
+    middleware(req, res, noopNext);
+    res.emit('finish');
+    await client.flush();
+
+    expect(bodies[0]?.requests[0]?.path).toBe('/');
+    client.close();
+  });
+
+  test('finish swallows resolver errors', async () => {
+    async function okFetch(): Promise<{ status: number }> {
+      return { status: 202 };
+    }
+
+    const client = createClient({
+      ingestUrl: 'http://obs.test/v1/ingest',
+      writeKey: 'ok_write_test_secret',
+      service: 'demo',
+      env: 'test',
+      flushIntervalMs: 0,
+      fetch: okFetch,
+    });
+    const middleware = expressMiddleware(client, {
+      resolveTags() {
+        throw new Error('boom');
+      },
+    });
+    const req = createReq();
+    const res = createRes();
+
+    function noopNext(): void {
+      return;
+    }
+
+    middleware(req, res, noopNext);
+    expect(() => {
+      res.emit('finish');
+    }).not.toThrow();
+    client.close();
+  });
+});

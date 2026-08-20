@@ -2,6 +2,27 @@
   "name": "traceorb-node",
   "version": "0.3.0",
   "description": "Traceorb ingest SDK for Node.js",
+  "license": "MIT",
+  "author": "Eduardo De Patta",
+  "homepage": "https://traceorb.com",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/EduardoDePatta/obs-sdk-node.git"
+  },
+  "bugs": {
+    "url": "https://github.com/EduardoDePatta/obs-sdk-node/issues"
+  },
+  "keywords": [
+    "traceorb",
+    "observability",
+    "nodejs",
+    "express",
+    "fastify",
+    "middleware",
+    "http",
+    "request-tracing",
+    "apm"
+  ],
   "type": "module",
   "engines": {
     "node": ">=22"
@@ -28,6 +49,7 @@
     "typecheck": "tsc --noEmit",
     "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs && tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
     "prepublishOnly": "npm run build",
+    "prepare": "husky",
     "smoke": "npm run build && node scripts/smoke-ingest.mjs"
   },
   "peerDependencies": {
@@ -50,6 +72,7 @@
     "eslint-config-prettier": "^10.1.8",
     "express": "^5.1.0",
     "fastify": "^5.12.1",
+    "husky": "^9.1.7",
     "prettier": "^3.9.6",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.67.0",

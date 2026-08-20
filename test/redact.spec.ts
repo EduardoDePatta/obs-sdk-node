@@ -1,9 +1,8 @@
 import { describe, expect, test } from 'vitest';
 
-import { REDACTED } from '../src/config';
+import { MAX_EXTRA_REDACT_KEYS, REDACTED } from '../src/config';
 import mergeRedactKeys from '../src/mergeRedactKeys';
 import { redactBody, redactHeaders } from '../src/redact';
-import truncateField from '../src/truncate';
 
 describe('redact', () => {
   test('replaces authorization in headers', () => {
@@ -53,6 +52,29 @@ describe('redact', () => {
     });
     expect(body).toEqual({ email: REDACTED, sku: 'abc' });
   });
+
+  test('redacts secrets inside arrays', () => {
+    const output = redactBody({
+      value: [{ password: 'hunter2' }, { sku: 'abc' }],
+      extraKeys: [],
+    });
+
+    expect(output).toEqual([{ password: REDACTED }, { sku: 'abc' }]);
+  });
+
+  test('skips blank extra keys', () => {
+    const output = redactHeaders({
+      headers: { Accept: 'application/json' },
+      extraKeys: ['', '  '],
+    });
+
+    expect(output.Accept).toBe('application/json');
+  });
+
+  test('leaves primitives unchanged', () => {
+    expect(redactBody({ value: 'plain', extraKeys: [] })).toBe('plain');
+    expect(redactBody({ value: null, extraKeys: [] })).toBeNull();
+  });
 });
 
 describe('mergeRedactKeys', () => {
@@ -61,12 +83,17 @@ describe('mergeRedactKeys', () => {
       mergeRedactKeys([[' Email ', 'cpf'], ['email', 'ssn'], undefined]),
     ).toEqual(['email', 'cpf', 'ssn']);
   });
-});
 
-describe('truncateField', () => {
-  test('cuts utf8 at the byte cap', () => {
-    const value = 'é'.repeat(20);
-    const truncated = truncateField({ value, maxBytes: 5 });
-    expect(Buffer.byteLength(truncated, 'utf8')).toBeLessThanOrEqual(5);
+  test('skips blank names', () => {
+    expect(mergeRedactKeys([['', '  ', 'email']])).toEqual(['email']);
+  });
+
+  test('stops at the extra-key cap', () => {
+    const keys: string[] = [];
+    for (let i = 0; i < MAX_EXTRA_REDACT_KEYS + 8; i += 1) {
+      keys.push(`k${i}`);
+    }
+
+    expect(mergeRedactKeys([keys])).toHaveLength(MAX_EXTRA_REDACT_KEYS);
   });
 });

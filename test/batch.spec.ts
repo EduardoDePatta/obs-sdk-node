@@ -2,7 +2,12 @@ import { randomUUID } from 'node:crypto';
 
 import { describe, expect, test } from 'vitest';
 
-import IngestBatch, { type FetchLike } from '../src/batch';
+import IngestBatch, {
+  defaultFlushSize,
+  defaultOnDrop,
+  type FetchLike,
+} from '../src/batch';
+import { MAX_INGEST_BATCH } from '../src/config';
 import type { IngestPayload, IngestRequest } from '../src/types';
 
 function makeRequest(path: string): IngestRequest {
@@ -135,5 +140,121 @@ describe('IngestBatch', () => {
     await batch.flush();
     expect(calls).toBe(1);
     expect(drops).toEqual(['invalid_response']);
+  });
+
+  test('200 is success', async () => {
+    async function okFetch(): Promise<{ status: number }> {
+      return { status: 200 };
+    }
+
+    const batch = createBatch({ fetch: okFetch });
+    batch.enqueue(makeRequest('/x'));
+    await expect(batch.flush()).resolves.toBeUndefined();
+  });
+
+  test('429 retries then succeeds', async () => {
+    let calls = 0;
+    async function rateLimitedThenOk(): Promise<{ status: number }> {
+      calls += 1;
+      if (calls === 1) {
+        return { status: 429 };
+      }
+
+      return { status: 202 };
+    }
+
+    const batch = createBatch({ fetch: rateLimitedThenOk });
+    batch.enqueue(makeRequest('/x'));
+    await batch.flush();
+    expect(calls).toBe(2);
+  });
+
+  test('unknown 4xx drops without retrying', async () => {
+    let calls = 0;
+    const drops: string[] = [];
+    async function teapotFetch(): Promise<{ status: number }> {
+      calls += 1;
+      return { status: 418 };
+    }
+
+    function captureDrop(reason: string): void {
+      drops.push(reason);
+    }
+
+    const batch = createBatch({
+      fetch: teapotFetch,
+      onDrop: captureDrop,
+    });
+    batch.enqueue(makeRequest('/x'));
+    await batch.flush();
+    expect(calls).toBe(1);
+    expect(drops).toEqual(['invalid_response']);
+  });
+
+  test('500 retries until exhausted', async () => {
+    let calls = 0;
+    const drops: string[] = [];
+    async function serverErrorFetch(): Promise<{ status: number }> {
+      calls += 1;
+      return { status: 500 };
+    }
+
+    function captureDrop(reason: string): void {
+      drops.push(reason);
+    }
+
+    const batch = createBatch({
+      fetch: serverErrorFetch,
+      onDrop: captureDrop,
+    });
+    batch.enqueue(makeRequest('/x'));
+    await batch.flush();
+    expect(calls).toBe(3);
+    expect(drops).toEqual(['retry_exhausted']);
+  });
+
+  test('flush of an empty queue does not post', async () => {
+    let calls = 0;
+    async function countingFetch(): Promise<{ status: number }> {
+      calls += 1;
+      return { status: 202 };
+    }
+
+    const batch = createBatch({ fetch: countingFetch });
+    await batch.flush();
+    expect(calls).toBe(0);
+  });
+
+  test('close is safe before a timer exists', () => {
+    async function okFetch(): Promise<{ status: number }> {
+      return { status: 202 };
+    }
+
+    const batch = createBatch({ fetch: okFetch });
+    expect(() => {
+      batch.close();
+      batch.close();
+    }).not.toThrow();
+  });
+
+  test('defaultFlushSize never exceeds the ingest batch cap', () => {
+    expect(defaultFlushSize(8)).toBe(8);
+    expect(defaultFlushSize(10_000)).toBe(MAX_INGEST_BATCH);
+  });
+
+  test('defaultOnDrop writes to console.error', () => {
+    const lines: unknown[][] = [];
+    const original = console.error;
+    console.error = function captureError(...args: unknown[]) {
+      lines.push(args);
+    };
+
+    try {
+      defaultOnDrop('network');
+    } finally {
+      console.error = original;
+    }
+
+    expect(lines).toEqual([['[obs]', 'network']]);
   });
 });

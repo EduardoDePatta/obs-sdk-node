@@ -136,4 +136,80 @@ describe('fastifyMiddleware', () => {
     client.close();
     await app.close();
   });
+
+  test('captures tags userId and route pattern', async () => {
+    const bodies: IngestPayload[] = [];
+    async function captureFetch(
+      _url: string,
+      init: { body: string },
+    ): Promise<{ status: number }> {
+      bodies.push(JSON.parse(init.body) as IngestPayload);
+      return { status: 202 };
+    }
+
+    const client = createClient({
+      ingestUrl: 'http://obs.test/v1/ingest',
+      writeKey: 'ok_write_test_secret',
+      service: 'obs-api',
+      env: 'test',
+      flushIntervalMs: 0,
+      fetch: captureFetch,
+    });
+
+    const app = Fastify();
+    fastifyMiddleware(app, client, {
+      resolveTags() {
+        return { tenant: 'acme' };
+      },
+      resolveUserId() {
+        return 'user-2';
+      },
+    });
+    app.get('/v1/orders/:id', async function order() {
+      return { ok: true };
+    });
+
+    await app.inject({ method: 'GET', url: '/v1/orders/9' });
+    await client.flush();
+
+    const request = bodies[0]?.requests[0];
+    expect(request?.path).toBe('/v1/orders/9');
+    expect(request?.routePattern).toBe('/v1/orders/:id');
+    expect(request?.tags).toEqual({ tenant: 'acme' });
+    expect(request?.userId).toBe('user-2');
+
+    client.close();
+    await app.close();
+  });
+
+  test('onResponse swallows resolver errors', async () => {
+    async function okFetch(): Promise<{ status: number }> {
+      return { status: 202 };
+    }
+
+    const client = createClient({
+      ingestUrl: 'http://obs.test/v1/ingest',
+      writeKey: 'ok_write_test_secret',
+      service: 'obs-api',
+      env: 'test',
+      flushIntervalMs: 0,
+      fetch: okFetch,
+    });
+
+    const app = Fastify();
+    fastifyMiddleware(app, client, {
+      resolveTags() {
+        throw new Error('boom');
+      },
+    });
+    app.get('/v1/me', async function me() {
+      return { ok: true };
+    });
+
+    const response = await app.inject({ method: 'GET', url: '/v1/me' });
+    expect(response.statusCode).toBe(200);
+
+    client.close();
+    await app.close();
+  });
 });
