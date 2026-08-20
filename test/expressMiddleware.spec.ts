@@ -139,6 +139,61 @@ describe('expressMiddleware', () => {
     client.close();
   });
 
+  test('redactKeys on the client, middleware, request, and obs.redact all apply', async () => {
+    const bodies: string[] = [];
+    async function captureFetch(
+      _url: string,
+      init: { body: string },
+    ): Promise<{ status: number }> {
+      bodies.push(init.body);
+      return { status: 202 };
+    }
+
+    const client = createClient({
+      ingestUrl: 'http://obs.test/v1/ingest',
+      writeKey: 'ok_write_test_secret',
+      service: 'demo',
+      env: 'test',
+      flushIntervalMs: 0,
+      fetch: captureFetch,
+      redactKeys: ['email'],
+    });
+    const middleware = expressMiddleware(client, {
+      redactKeys: ['cpf'],
+      resolveRedactKeys(req) {
+        return [String(req.headers['x-redact'] ?? '')];
+      },
+    });
+    const req = createReq();
+    req.headers['x-redact'] = 'phone';
+    req.body = {
+      email: 'ada@example.com',
+      cpf: '123',
+      phone: '999',
+      ssn: '000',
+      sku: 'abc',
+    };
+    const res = createRes();
+
+    function next(): void {
+      client.redact(['ssn']);
+    }
+
+    middleware(req, res, next);
+    res.emit('finish');
+    await client.flush();
+
+    const payload = JSON.parse(bodies[0] ?? '') as IngestPayload;
+    const requestBody = payload.requests[0]?.requestBodyJson ?? '';
+    expect(requestBody.includes('ada@example.com')).toBe(false);
+    expect(requestBody.includes('"123"')).toBe(false);
+    expect(requestBody.includes('999')).toBe(false);
+    expect(requestBody.includes('000')).toBe(false);
+    expect(requestBody.includes('abc')).toBe(true);
+    expect(requestBody).toContain('[redacted]');
+    client.close();
+  });
+
   test('step inside a bound store is included in the batch', async () => {
     const bodies: IngestPayload[] = [];
     async function captureFetch(

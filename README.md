@@ -54,7 +54,7 @@ app.use(
 
 CommonJS: `require('traceorb-node')`.
 
-If Traceorb is unreachable, your HTTP request still completes. Sensitive headers such as `authorization` and `cookie` are not sent.
+If Traceorb is unreachable, your HTTP request still completes. Headers and body fields named `authorization`, `cookie`, `set-cookie`, `password`, `token`, `secret`, `api_key`, and `apikey` are replaced with `[redacted]`.
 
 Fastify:
 
@@ -91,4 +91,42 @@ Inside a request:
 ```js
 obs.step('db.query', { table: 'orders' });
 obs.setTags({ city: '4' });
+obs.redact(['ssn']);
+```
+
+## Extra redaction
+
+The built-in names always apply. Add more field names in any of these places. Names are case-insensitive. They apply to headers, query, and bodies.
+
+On the client, for every request:
+
+```js
+const obs = createClient({
+  ingestUrl,
+  writeKey,
+  service: 'orders-api',
+  env: process.env.NODE_ENV ?? 'production',
+  redactKeys: ['email', 'cpf'],
+});
+```
+
+On the middleware:
+
+```js
+app.use(
+  expressMiddleware(obs, {
+    redactKeys: ['email', 'cpf'],
+    resolveRedactKeys(req) {
+      return [String(req.headers['x-redact'] ?? '')];
+    },
+  }),
+);
+```
+
+Fastify takes the same `redactKeys` and `resolveRedactKeys` options.
+
+Inside a handler, for that request only:
+
+```js
+obs.redact(['ssn']);
 ```

@@ -4,10 +4,13 @@ import type { NextFunction, Request, Response } from 'express';
 import type { ObsClient } from './client';
 import { createStore, runWith, type RequestStore } from './context';
 import ingestRequestFromCapture from './ingestRequestFromCapture';
+import mergeRedactKeys from './mergeRedactKeys';
 
 export type ExpressMiddlewareOptions = {
   resolveTags?: (req: Request) => Record<string, string> | undefined;
   resolveUserId?: (req: Request) => string | undefined;
+  redactKeys?: string[];
+  resolveRedactKeys?: (req: Request) => string[] | undefined;
 };
 
 function headersAsRecord(
@@ -104,11 +107,19 @@ export default function expressMiddleware(
       try {
         let extraTags: Record<string, string> | undefined;
         let userId: string | undefined;
+        let optionRedactKeys: string[] | undefined;
+        let resolvedRedactKeys: string[] | undefined;
         if (options !== undefined && options.resolveTags !== undefined) {
           extraTags = options.resolveTags(req);
         }
         if (options !== undefined && options.resolveUserId !== undefined) {
           userId = options.resolveUserId(req);
+        }
+        if (options !== undefined) {
+          optionRedactKeys = options.redactKeys;
+        }
+        if (options !== undefined && options.resolveRedactKeys !== undefined) {
+          resolvedRedactKeys = options.resolveRedactKeys(req);
         }
 
         const request = ingestRequestFromCapture({
@@ -123,6 +134,10 @@ export default function expressMiddleware(
             ip: resolveIp(req),
             userAgent: resolveUserAgent(req),
             extraTags,
+            extraRedactKeys: mergeRedactKeys([
+              optionRedactKeys,
+              resolvedRedactKeys,
+            ]),
             userId,
           },
           store,

@@ -12,6 +12,26 @@ function isSensitiveKey({
   return keys[key.toLowerCase()] === true;
 }
 
+function keysWithExtras({
+  base,
+  extraKeys,
+}: {
+  base: Record<string, true>;
+  extraKeys: string[];
+}): Record<string, true> {
+  const keys: Record<string, true> = { ...base };
+  for (const key of extraKeys) {
+    const normalized = key.trim().toLowerCase();
+    if (normalized === '') {
+      continue;
+    }
+
+    keys[normalized] = true;
+  }
+
+  return keys;
+}
+
 export function redactRecord({
   input,
   keys,
@@ -62,14 +82,31 @@ function redactValue({
   });
 }
 
-export function redactHeaders(
-  input: Record<string, unknown>,
-): Record<string, unknown> {
-  return redactRecord({ input, keys: REDACT_HEADER_KEYS });
+export function redactHeaders({
+  headers,
+  extraKeys,
+}: {
+  headers: Record<string, unknown>;
+  extraKeys: string[];
+}): Record<string, unknown> {
+  return redactRecord({
+    input: headers,
+    keys: keysWithExtras({ base: REDACT_HEADER_KEYS, extraKeys }),
+  });
 }
 
-export function redactBody(value: unknown): unknown {
-  return redactValue({ value, keys: REDACT_BODY_KEYS, depth: 0 });
+export function redactBody({
+  value,
+  extraKeys,
+}: {
+  value: unknown;
+  extraKeys: string[];
+}): unknown {
+  return redactValue({
+    value,
+    keys: keysWithExtras({ base: REDACT_BODY_KEYS, extraKeys }),
+    depth: 0,
+  });
 }
 
 export default redactHeaders;

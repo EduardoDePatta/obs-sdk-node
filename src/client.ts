@@ -13,10 +13,12 @@ import IngestBatch, {
 } from './batch';
 import {
   requestId as contextRequestId,
+  redact as contextRedact,
   setErrorMessage as contextSetErrorMessage,
   setTags as contextSetTags,
   step as contextStep,
 } from './context';
+import mergeRedactKeys from './mergeRedactKeys';
 import type { IngestRequest, StepOptions } from './types';
 
 export type CreateClientOptions = {
@@ -31,12 +33,14 @@ export type CreateClientOptions = {
   fetchTimeoutMs?: number;
   fetch?: FetchLike;
   onDrop?: (reason: DropReason) => void;
+  redactKeys?: string[];
 };
 
 export type ObsClient = {
   service: string;
   env: string;
   maxBodyBytes: number;
+  redactKeys: string[];
   step: (
     name: string,
     attrs?: Record<string, string>,
@@ -44,6 +48,7 @@ export type ObsClient = {
   ) => void;
   requestId: () => string | undefined;
   setTags: (tags: Record<string, string>) => void;
+  redact: (keys: string[]) => void;
   setErrorMessage: (message: string) => void;
   enqueue: (request: IngestRequest) => void;
   flush: () => Promise<void>;
@@ -128,9 +133,11 @@ export default function createClient(options: CreateClientOptions): ObsClient {
     service: options.service,
     env: options.env,
     maxBodyBytes: resolveMaxBodyBytes(options.maxBodyBytes),
+    redactKeys: mergeRedactKeys([options.redactKeys]),
     step: contextStep,
     requestId: contextRequestId,
     setTags: contextSetTags,
+    redact: contextRedact,
     setErrorMessage: contextSetErrorMessage,
     enqueue(request: IngestRequest) {
       batch.enqueue(request);

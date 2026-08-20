@@ -7,6 +7,7 @@ export const DEFAULT_FLUSH_INTERVAL_MS = 1000;
 export const DEFAULT_FETCH_TIMEOUT_MS = 10_000;
 export const RETRY_DELAYS_MS = [200, 800] as const;
 export const REDACTED = '[redacted]';
+export const MAX_EXTRA_REDACT_KEYS = 32;
 
 const SENSITIVE_KEYS: Record<string, true> = {
   authorization: true,

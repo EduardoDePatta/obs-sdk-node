@@ -1,6 +1,7 @@
 import type { ObsClient } from './client';
 import { bindStore, createStore, type RequestStore } from './context';
 import ingestRequestFromCapture from './ingestRequestFromCapture';
+import mergeRedactKeys from './mergeRedactKeys';
 
 export type FastifyObsRequest = {
   url: string;
@@ -52,6 +53,8 @@ export type FastifyMiddlewareOptions = {
     request: FastifyObsRequest,
   ) => Record<string, string> | undefined;
   resolveUserId?: (request: FastifyObsRequest) => string | undefined;
+  redactKeys?: string[];
+  resolveRedactKeys?: (request: FastifyObsRequest) => string[] | undefined;
 };
 
 const stores = new WeakMap<object, RequestStore>();
@@ -134,11 +137,19 @@ export default function fastifyMiddleware(
     try {
       let extraTags: Record<string, string> | undefined;
       let userId: string | undefined;
+      let optionRedactKeys: string[] | undefined;
+      let resolvedRedactKeys: string[] | undefined;
       if (options !== undefined && options.resolveTags !== undefined) {
         extraTags = options.resolveTags(request);
       }
       if (options !== undefined && options.resolveUserId !== undefined) {
         userId = options.resolveUserId(request);
+      }
+      if (options !== undefined) {
+        optionRedactKeys = options.redactKeys;
+      }
+      if (options !== undefined && options.resolveRedactKeys !== undefined) {
+        resolvedRedactKeys = options.resolveRedactKeys(request);
       }
 
       let ip: string | undefined;
@@ -158,6 +169,10 @@ export default function fastifyMiddleware(
           ip,
           userAgent: resolveUserAgent(request),
           extraTags,
+          extraRedactKeys: mergeRedactKeys([
+            optionRedactKeys,
+            resolvedRedactKeys,
+          ]),
           userId,
         },
         store,

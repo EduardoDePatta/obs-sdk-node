@@ -1,6 +1,7 @@
 import { MAX_TAGS_PER_REQUEST } from './config';
 import type { ObsClient } from './client';
 import type { RequestStore } from './context';
+import mergeRedactKeys from './mergeRedactKeys';
 import { toBodyJson, toHeadersJson } from './toJsonField';
 import type { IngestRequest } from './types';
 
@@ -15,6 +16,7 @@ export type CapturedHttp = {
   ip: string | undefined;
   userAgent: string | undefined;
   extraTags: Record<string, string> | undefined;
+  extraRedactKeys: string[] | undefined;
   userId: string | undefined;
 };
 
@@ -82,6 +84,11 @@ export default function ingestRequestFromCapture({
 }): IngestRequest {
   const finishedAt = Date.now();
   const durationMs = Math.max(0, finishedAt - store.startedAt.getTime());
+  const extraKeys = mergeRedactKeys([
+    client.redactKeys,
+    http.extraRedactKeys,
+    store.redactKeys,
+  ]);
   const maxBytes = client.maxBodyBytes;
 
   const request: IngestRequest = {
@@ -116,7 +123,7 @@ export default function ingestRequestFromCapture({
   assignOptionalString({
     target: request,
     key: 'queryJson',
-    value: toBodyJson({ value: http.query, maxBytes }),
+    value: toBodyJson({ value: http.query, maxBytes, extraKeys }),
   });
   assignOptionalString({
     target: request,
@@ -124,17 +131,18 @@ export default function ingestRequestFromCapture({
     value: toHeadersJson({
       headers: http.headers,
       maxBytes,
+      extraKeys,
     }),
   });
   assignOptionalString({
     target: request,
     key: 'requestBodyJson',
-    value: toBodyJson({ value: http.body, maxBytes }),
+    value: toBodyJson({ value: http.body, maxBytes, extraKeys }),
   });
   assignOptionalString({
     target: request,
     key: 'responseBodyJson',
-    value: toBodyJson({ value: store.responseBody, maxBytes }),
+    value: toBodyJson({ value: store.responseBody, maxBytes, extraKeys }),
   });
 
   if (store.events.length > 0) {

@@ -1,6 +1,13 @@
 import { describe, expect, test } from 'vitest';
 
-import { createStore, requestId, runWith, setTags, step } from '../src/context';
+import {
+  createStore,
+  redact,
+  requestId,
+  runWith,
+  setTags,
+  step,
+} from '../src/context';
 
 describe('context', () => {
   test('step is a no-op without a store', () => {
@@ -32,5 +39,20 @@ describe('context', () => {
     setTags({ city: '6' });
     const store = createStore();
     expect(store.tags).toEqual({});
+  });
+
+  test('redact is a no-op without a store', () => {
+    redact(['email']);
+    const store = createStore();
+    expect(store.redactKeys).toEqual([]);
+  });
+
+  test('redact merges extra keys on the store', () => {
+    const store = createStore();
+    runWith(store, () => {
+      redact(['Email']);
+      redact(['cpf']);
+    });
+    expect(store.redactKeys).toEqual(['email', 'cpf']);
   });
 });

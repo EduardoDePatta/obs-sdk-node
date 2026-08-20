@@ -2,6 +2,7 @@ import { AsyncLocalStorage } from 'node:async_hooks';
 import { randomUUID } from 'node:crypto';
 
 import { MAX_EVENTS_PER_REQUEST } from './config';
+import mergeRedactKeys from './mergeRedactKeys';
 import type { EventLevel, IngestEvent, StepOptions } from './types';
 
 export type RequestStore = {
@@ -9,6 +10,7 @@ export type RequestStore = {
   startedAt: Date;
   events: IngestEvent[];
   tags: Record<string, string>;
+  redactKeys: string[];
   errorMessage?: string;
   responseBody?: unknown;
 };
@@ -21,6 +23,7 @@ export function createStore(): RequestStore {
     startedAt: new Date(),
     events: [],
     tags: {},
+    redactKeys: [],
   };
 }
 
@@ -97,6 +100,15 @@ export function setTags(tags: Record<string, string>): void {
   };
 }
 
+export function redact(keys: string[]): void {
+  const store = storage.getStore();
+  if (store === undefined) {
+    return;
+  }
+
+  store.redactKeys = mergeRedactKeys([store.redactKeys, keys]);
+}
+
 export function setErrorMessage(message: string): void {
   const store = storage.getStore();
   if (store === undefined) {
@@ -123,6 +135,7 @@ export default {
   step,
   requestId,
   setTags,
+  redact,
   setErrorMessage,
   setResponseBody,
 };
