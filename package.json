@@ -7,10 +7,10 @@
   "homepage": "https://traceorb.com",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/EduardoDePatta/obs-sdk-node.git"
+    "url": "git+https://github.com/TraceOrb/obs-sdk-node.git"
   },
   "bugs": {
-    "url": "https://github.com/EduardoDePatta/obs-sdk-node/issues"
+    "url": "https://github.com/TraceOrb/obs-sdk-node/issues"
   },
   "keywords": [
     "traceorb",
