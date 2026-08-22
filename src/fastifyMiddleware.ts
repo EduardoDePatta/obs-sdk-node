@@ -1,7 +1,8 @@
 import type { ObsClient } from './client';
-import { bindStore, createStore, type RequestStore } from './context';
+import { bindStore, createStore } from './context';
 import ingestRequestFromCapture from './ingestRequestFromCapture';
 import mergeRedactKeys from './mergeRedactKeys';
+import { getMappedRequestStore, setRequestStore } from './requestStoreMap';
 
 export type FastifyObsRequest = {
   url: string;
@@ -57,8 +58,6 @@ export type FastifyMiddlewareOptions = {
   resolveRedactKeys?: (request: FastifyObsRequest) => string[] | undefined;
 };
 
-const stores = new WeakMap<object, RequestStore>();
-
 function shouldSkip({
   request,
   options,
@@ -108,7 +107,7 @@ export default function fastifyMiddleware(
     }
 
     const store = createStore();
-    stores.set(request, store);
+    setRequestStore(request, store);
     bindStore(store);
     done();
   });
@@ -116,7 +115,7 @@ export default function fastifyMiddleware(
   hooks.addHook(
     'onSend',
     function captureObsBody(request, _reply, payload, done) {
-      const store = stores.get(request);
+      const store = getMappedRequestStore(request);
       if (store === undefined) {
         done(null, payload);
         return;
@@ -128,7 +127,7 @@ export default function fastifyMiddleware(
   );
 
   hooks.addHook('onResponse', function enqueueObsRequest(request, reply, done) {
-    const store = stores.get(request);
+    const store = getMappedRequestStore(request);
     if (store === undefined) {
       done();
       return;
