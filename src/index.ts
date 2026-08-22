@@ -7,6 +7,8 @@ export type {
   FastifyMiddlewareOptions,
   FastifyObsApp,
 } from './fastifyMiddleware';
+export { default as expressErrorHandler } from './expressErrorHandler';
+export { default as fastifyErrorHandler } from './fastifyErrorHandler';
 export type {
   EventLevel,
   IngestEvent,
