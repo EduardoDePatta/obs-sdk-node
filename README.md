@@ -86,6 +86,22 @@ fastifyMiddleware(app, obs, {
 });
 ```
 
+## Capture the request error (optional)
+
+The middleware does not record thrown exceptions. Mount the error handler **after your routes**. The 500 then gets `errorMessage` and an `unhandled.error` step on the timeline. Skip this and 4xx/5xx still ingest; you just will not get the exception unless the app already called `obs.setErrorMessage`.
+
+```js
+import { createClient, expressMiddleware, expressErrorHandler, fastifyMiddleware, fastifyErrorHandler } from 'traceorb-node';
+
+app.use(expressErrorHandler(obs));
+
+fastifyErrorHandler(app, obs);
+```
+
+Express: `app.use(expressErrorHandler(obs))` last. Fastify: `fastifyErrorHandler(app, obs)` after `fastifyMiddleware`. The helper always calls `next(err)` / `done()` — your 500 stays a 500. If a route catches the error and responds itself, the handler never runs; call `obs.setErrorMessage` in that path.
+
+CommonJS: `require('traceorb-node')` also exports `expressErrorHandler` and `fastifyErrorHandler`.
+
 Inside a request:
 
 ```js
