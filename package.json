@@ -50,7 +50,10 @@
     "build": "tsc -p tsconfig.build.json && node scripts/fix-esm-extensions.mjs && tsc -p tsconfig.cjs.json && node scripts/write-cjs-package.mjs",
     "prepublishOnly": "npm run build",
     "prepare": "husky",
-    "smoke": "npm run build && node scripts/smoke-ingest.mjs"
+    "smoke": "npm run build && node scripts/smoke-ingest.mjs",
+    "version:major": "npm version major && git push origin HEAD --follow-tags",
+    "version:minor": "npm version minor && git push origin HEAD --follow-tags",
+    "version:patch": "npm version patch && git push origin HEAD --follow-tags"
   },
   "peerDependencies": {
     "express": ">=4",
